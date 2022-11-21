@@ -121,3 +121,11 @@ prisons_ct <- st_centroid(prisons)
     mapview(prisons_ct, canvas=TRUE, cex=2) +
     mapview(prisons,canvas=TRUE, legend=FALSE)
 ```
+
+## Aim 1
+
+Water quality monitoring violations from utilities
+
+## Aim 2
+
+EJ (contamination sources)
