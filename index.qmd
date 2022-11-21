@@ -1,0 +1,123 @@
+---
+title: "Preliminary Analysis for Appalachian Prison Water Contamination Exposure Project"
+author: 
+  - Kyle Onda, Center for Geospatial Solutions
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format: 
+  html:
+    title-block-banner: true
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    html-math-method: katex
+    css: styles.css
+    code-fold: true
+    code-summary: "show the code"
+    code-overflow: wrap
+    code-tools: true
+    number-sections: true
+    theme: 
+      dark: slate
+      light: flatly
+editor: visual
+---
+
+## Introduction 
+
+The purpose of this document is to demonstrate some data integration for analyzing water contaminant exposures in Appalachi
+
+## Setup
+
+Here we import necessary libraries.
+
+```{r}
+library(tidyverse)
+library(sf)
+library(mapview)
+```
+
+## Map main features of interest
+
+### Get Geospatial Data
+
+First we get the boundaries of the Appalachian Regional Commission (ARC) and its constituent counties
+
+```{r}
+arc <- sf::read_sf("https://services.arcgis.com/nkunl3y8FDxPkXDl/ArcGIS/rest/services/arc_boundary/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=")
+
+counties <- sf::read_sf("https://reference.geoconnex.us/collections/counties/items?limit=4000")
+states <- sf::read_sf("https://reference.geoconnex.us/collections/states/items?limit=4000")
+counties_ct <- st_centroid(counties)
+counties_ct <- counties_ct[arc,]
+counties <- counties[which(counties$uri %in% counties_ct$uri),]
+states <- states %>% filter(STATEFP %in% counties$STATEFP)
+```
+
+Now we get relevant public water systems from the Internet of Water geoconnex.us system
+
+```{r}
+download.file(url = "https://www.hydroshare.org/resource/3295a17b4cc24d34bd6a5c5aaf753c50/data/contents/ref_pws.gpkg" ,destfile="data/pws.gpkg")
+
+pws_all <- read_sf("data/pws.gpkg") %>% st_make_valid()
+pws <- pws_all %>% 
+  st_intersects(arc) %>% lengths()
+
+pws <- pws_all[which(pws==1),]
+
+pws <- pws %>%
+  select(pwsid,
+         uri,
+         pws_name,
+         tier,
+         primary_water_source,
+         sdwis_link
+         ) %>%
+  mutate(sdwis_link =
+           paste0('<a href="',
+            sdwis_link,
+            '">SDWIS link</a>')
+  )
+```
+
+Now we get prisons in the region
+
+```{r}
+prisons_all <- sf::read_sf("https://opendata.arcgis.com/api/v3/datasets/2d6109d4127d458eaf0958e4c5296b67_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1") 
+
+prisons <- prisons_all %>% 
+  st_intersects(arc) %>% lengths()
+
+prisons <- prisons_all[which(prisons==1),]
+prisons_ct <- st_centroid(prisons)
+## filter to fed/state only
+## visualize Status
+
+
+```
+
+### Make a map
+
+```{r}
+
+
+  mapview(arc,
+        alpha.regions=0,
+        color="black",
+        col.regions="black",
+        lwd=3,
+        layer.name = "ARC Boundary", canvas=TRUE) +
+  mapview(states,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=2,
+          layer.name="States", canvas=TRUE) +
+   mapview(counties,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=1,
+          layer.name="Counties", canvas=TRUE) +
+    mapview(pws,
+          zcol="tier", canvas=TRUE) +
+    mapview(prisons_ct, canvas=TRUE, cex=2) +
+    mapview(prisons,canvas=TRUE, legend=FALSE)
+```
