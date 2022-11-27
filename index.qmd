@@ -56,7 +56,7 @@ states <- states %>% filter(STATEFP %in% counties$STATEFP)
 Now we get relevant public water systems from the Internet of Water geoconnex.us system
 
 ```{r}
-download.file(url = "https://www.hydroshare.org/resource/3295a17b4cc24d34bd6a5c5aaf753c50/data/contents/ref_pws.gpkg" ,destfile="data/pws.gpkg")
+#download.file(url = "https://www.hydroshare.org/resource/3295a17b4cc24d34bd6a5c5aaf753c50/data/contents/ref_pws.gpkg" ,destfile="data/pws.gpkg")
 
 pws_all <- read_sf("data/pws.gpkg") %>% st_make_valid()
 pws <- pws_all %>% 
@@ -87,10 +87,27 @@ prisons_all <- sf::read_sf("https://opendata.arcgis.com/api/v3/datasets/2d6109d4
 prisons <- prisons_all %>% 
   st_intersects(arc) %>% lengths()
 
-prisons <- prisons_all[which(prisons==1),]
+prisons <- prisons_all[which(prisons==1 & type),]
 prisons_ct <- st_centroid(prisons)
 ## filter to fed/state only
 ## visualize Status
+
+## landfills
+landfills <- "https://hifld-geoplatform.opendata.arcgis.com/datasets/solid-waste-landfill-facilities/explore?location=35.825712%2C-70.244151%2C4.54"
+
+## superfuns
+
+## O&G sites
+
+## Mining sites
+
+## state and county common IDs
+
+### Pick 2 or 3 prisons for operationalizeing it 
+
+## WQP
+### 2-3 Prisons 
+
 
 
 ```
@@ -126,6 +143,32 @@ prisons_ct <- st_centroid(prisons)
 
 Water quality monitoring violations from utilities
 
-## Aim 2
+## Aim 2: Proximity to environmental hazards
 
 EJ (contamination sources)
+
+100 prisons in appalachia. 50% are in proximity to 2km/ 5km
+
+-   drinking water treatment plant
+
+-   source water
+
+What's the counter-factual? Other institutionalized populations
+
+-   schools
+
+-   community colleges
+
+-   Retirement Homes
+
+Central Appalachia Deep Dive
+
+-   Compare with local communities
+
+-   Wardens cooperative in Virginia
+
+USP Big Sandy
+
+https://www.bop.gov/locations/institutions/bsy/index.jsp
+
+http://dep.gateway.ky.gov/DWW/JSP/AnalyteList.jsp?tinwsys_is_number=1358&tinwsys_st_code=KY
