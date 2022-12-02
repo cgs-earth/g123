@@ -22,7 +22,7 @@ format:
 editor: visual
 ---
 
-## Introduction 
+## Introduction
 
 The purpose of this document is to demonstrate some data integration for analyzing water contaminant exposures in Appalachi
 
@@ -34,6 +34,7 @@ Here we import necessary libraries.
 library(tidyverse)
 library(sf)
 library(mapview)
+library(tidycensus)
 ```
 
 ## Map main features of interest
@@ -87,27 +88,203 @@ prisons_all <- sf::read_sf("https://opendata.arcgis.com/api/v3/datasets/2d6109d4
 prisons <- prisons_all %>% 
   st_intersects(arc) %>% lengths()
 
-prisons <- prisons_all[which(prisons==1 & type),]
+prisons <- prisons_all[which(prisons==1 & prisons_all$TYPE %in% c("STATE","FEDERAL")),]
 prisons_ct <- st_centroid(prisons)
 ## filter to fed/state only
 ## visualize Status
 
 ## landfills
-landfills <- "https://hifld-geoplatform.opendata.arcgis.com/datasets/solid-waste-landfill-facilities/explore?location=35.825712%2C-70.244151%2C4.54"
+landfills <- sf::read_sf("https://hifld-geoplatform.opendata.arcgis.com/datasets/solid-waste-landfill-facilities/explore?location=35.825712%2C-70.244151%2C4.54")
 
 ## superfuns
+superfund <- sf::read_sf("https://services.arcgis.com/cJ9YHowT8TU7DUyn/ArcGIS/rest/services/Superfund_National_Priorities_List_(NPL)_Sites_with_Status_Information/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=")
 
-## O&G sites
+### Census
+library(tigris)
+library(tidyverse)
+library(tidycensus)
+library(sf)
+options(tigris_use_cache = TRUE)
+ctys <- counties(cb = TRUE) %>% 
+  mutate(fips = paste0(STATEFP,COUNTYFP)) %>% 
+  filter(fips %in% counties_ct$id)
 
-## Mining sites
+state_codes <- states$id
 
-## state and county common IDs
+### Block Groups2000
+bgs_2000 <- map_df(state_codes, function(state_code) {
+  state <- filter(ctys, STATEFP == state_code)
+  county_codes <- state$COUNTYFP
+  get_decennial(geography = "block group", year =2000, geometry=TRUE,
+                variables = "H010001",keep_geo_vars=TRUE,
+          state = state_code, county = county_codes)
+})
 
-### Pick 2 or 3 prisons for operationalizeing it 
+sf::write_sf(bgs_2000,"data/census/bg2000.gpkg")
+## Census tracts 2000
+tracts_2000 <- map_df(state_codes, function(state_code) {
+  state <- filter(ctys, STATEFP == state_code)
+  county_codes <- state$COUNTYFP
+  get_decennial(geography = "tract", year =2000, geometry=TRUE,
+                variables = "H010001",keep_geo_vars=TRUE,
+          state = state_code, county = county_codes)
+})
+sf::write_sf(tracts_2000,"data/census/tr2000.gpkg")
 
-## WQP
-### 2-3 Prisons 
+### Block Groups2010
+bgs_2010 <- map_df(state_codes, function(state_code) {
+  state <- filter(ctys, STATEFP == state_code)
+  county_codes <- state$COUNTYFP
+  get_decennial(geography = "block group", year =2010, geometry=TRUE,
+                variables = "H010001",keep_geo_vars=TRUE,
+          state = state_code, county = county_codes)
+})
 
+sf::write_sf(bgs_2010,"data/census/bg2010.gpkg")
+## Census tracts 2010
+tracts_2010 <- map_df(state_codes, function(state_code) {
+  state <- filter(ctys, STATEFP == state_code)
+  county_codes <- state$COUNTYFP
+  get_decennial(geography = "tract", year =2010, geometry=TRUE,
+                variables = "H010001", keep_geo_vars=TRUE,
+          state = state_code, county = county_codes)
+})
+sf::write_sf(tracts_2010,"data/census/tr2010.gpkg")
+
+### Block Groups2020
+bgs_2020 <- map_df(state_codes, function(state_code) {
+  state <- filter(ctys, STATEFP == state_code)
+  county_codes <- state$COUNTYFP
+  get_decennial(geography = "block group", year =2020, geometry=TRUE,
+                variables = "H1_001N",keep_geo_vars=TRUE,
+          state = state_code, county = county_codes)
+})
+
+sf::write_sf(bgs_2020,"data/census/bg2020.gpkg")
+## Census tracts 2020
+tracts_2020 <- map_df(state_codes, function(state_code) {
+  state <- filter(ctys, STATEFP == state_code)
+  county_codes <- state$COUNTYFP
+  get_decennial(geography = "tract", year =2020, geometry=TRUE,
+                variables = "H1_001N", keep_geo_vars=TRUE,
+          state = state_code, county = county_codes)
+})
+sf::write_sf(tracts_2020,"data/census/tr2020.gpkg")
+
+
+
+## prisons to tracts
+p1 <- st_join(prisons_ct%>%mutate(ID_COUNTY=COUNTYFIPS),tracts_2000%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_00=GEOID)%>%
+                select(ID_TRACT_00)%>%
+                st_transform(4326)) %>%
+  st_join(tracts_2010%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_10=GEOID)%>%
+                select(ID_TRACT_10)%>%
+                st_transform(4326)) %>%
+    st_join(tracts_2020%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_20=GEOID)%>%
+                select(ID_TRACT_20)%>%
+                st_transform(4326)) %>%
+     st_join(bgs_2000%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_00=GEOID)%>%
+                select(ID_BLKGRP_00)%>%
+                st_transform(4326)) %>%
+  st_join(bgs_2010%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_10=GEOID)%>%
+                select(ID_BLKGRP_10)%>%
+                st_transform(4326)) %>%
+    st_join(bgs_2020%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_20=GEOID)%>%
+                select(ID_BLKGRP_20)%>%
+                st_transform(4326)) 
+
+sf::write_sf(p1,"data/prisons_geocode.gpkg")
+write_csv(p1 %>% st_drop_geometry(),"data/prisons_geocode.csv")
+
+## superfund to tracts
+sf <- st_join(superfund%>%st_transform(4326),counties%>%
+                mutate(ID_COUNTY=paste0(STATEFP,COUNTYFP))) %>%
+  filter(!is.na(ID_COUNTY))%>%
+  st_join(tracts_2000%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_00=GEOID)%>%
+                select(ID_TRACT_00)%>%
+                st_transform(4326)) %>%
+  st_join(tracts_2010%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_10=GEOID)%>%
+                select(ID_TRACT_10)%>%
+                st_transform(4326)) %>%
+    st_join(tracts_2020%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_20=GEOID)%>%
+                select(ID_TRACT_20)%>%
+                st_transform(4326)) %>%
+     st_join(bgs_2000%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_00=GEOID)%>%
+                select(ID_BLKGRP_00)%>%
+                st_transform(4326)) %>%
+  st_join(bgs_2010%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_10=GEOID)%>%
+                select(ID_BLKGRP_10)%>%
+                st_transform(4326)) %>%
+    st_join(bgs_2020%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_20=GEOID)%>%
+                select(ID_BLKGRP_20)%>%
+                st_transform(4326)) 
+
+sf::write_sf(sf,"data/superfund_geocode.gpkg")
+write_csv(sf %>% st_drop_geometry(),"data/superfund_geocode.csv")
+
+## superfund to tracts
+lf <- sf::read_sf("data/landfills.geojson") %>% 
+  st_join(counties%>%
+                mutate(ID_COUNTY=paste0(STATEFP,COUNTYFP))%>%
+            select(ID_COUNTY)) %>%
+  filter(!is.na(ID_COUNTY))%>%
+  st_join(tracts_2000%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_00=GEOID)%>%
+                select(ID_TRACT_00)%>%
+                st_transform(4326)) %>%
+  st_join(tracts_2010%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_10=GEOID)%>%
+                select(ID_TRACT_10)%>%
+                st_transform(4326)) %>%
+    st_join(tracts_2020%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_20=GEOID)%>%
+                select(ID_TRACT_20)%>%
+                st_transform(4326)) %>%
+     st_join(bgs_2000%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_00=GEOID)%>%
+                select(ID_BLKGRP_00)%>%
+                st_transform(4326)) %>%
+  st_join(bgs_2010%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_10=GEOID)%>%
+                select(ID_BLKGRP_10)%>%
+                st_transform(4326)) %>%
+    st_join(bgs_2020%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_20=GEOID)%>%
+                select(ID_BLKGRP_20)%>%
+                st_transform(4326)) 
+
+sf::write_sf(sf,"data/landfill_geocode.gpkg")
+write_csv(sf %>% st_drop_geometry(),"data/landfill_geocode.csv")
 
 
 ```
@@ -133,10 +310,11 @@ landfills <- "https://hifld-geoplatform.opendata.arcgis.com/datasets/solid-waste
           col.regions="grey",
           lwd=1,
           layer.name="Counties", canvas=TRUE) +
-    mapview(pws,
-          zcol="tier", canvas=TRUE) +
-    mapview(prisons_ct, canvas=TRUE, cex=2) +
-    mapview(prisons,canvas=TRUE, legend=FALSE)
+    mapview(pws,canvas=TRUE, layer.name="Drinking Water Systems") +
+    mapview(prisons_ct, canvas=TRUE, cex=5, zcol="TYPE", layer.name="Prisons") +
+    mapview(prisons,canvas=TRUE, legend=FALSE,zcol="TYPE")
+  
+  ## see https://rpubs.com/ksonda-lilp/prisons-pws-arc
 ```
 
 ## Aim 1
@@ -145,7 +323,7 @@ Water quality monitoring violations from utilities
 
 ## Aim 2: Proximity to environmental hazards
 
-EJ (contamination sources)
+EJ (contamination sources) (look for ejscreen data)
 
 100 prisons in appalachia. 50% are in proximity to 2km/ 5km
 
@@ -159,7 +337,17 @@ What's the counter-factual? Other institutionalized populations
 
 -   community colleges
 
+    https://ope.ed.gov/dapip/#/download-data-files
+
+-   https://nces.ed.gov/ipeds/use-the-data
+
 -   Retirement Homes
+
+    https://hifld-geoplatform.opendata.arcgis.com/maps/nursing-homes
+
+-   Military installations
+
+Census tract, 2020 tracts
 
 Central Appalachia Deep Dive
 
@@ -172,3 +360,9 @@ USP Big Sandy
 https://www.bop.gov/locations/institutions/bsy/index.jsp
 
 http://dep.gateway.ky.gov/DWW/JSP/AnalyteList.jsp?tinwsys_is_number=1358&tinwsys_st_code=KY
+
+SW Virginia
+
+Red Onion
+
+Tennessee Case Studies
