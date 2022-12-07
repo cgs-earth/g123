@@ -243,8 +243,8 @@ sf <- st_join(superfund%>%st_transform(4326),counties%>%
                 select(ID_BLKGRP_20)%>%
                 st_transform(4326)) 
 
-sf::write_sf(sf,"data/superfund_geocode.gpkg")
-write_csv(sf %>% st_drop_geometry(),"data/superfund_geocode.csv")
+sf::write_sf(sf,"data/geocoded/superfund_geocode.gpkg")
+write_csv(sf %>% st_drop_geometry(),"data/geocoded/superfund_geocode.csv")
 
 ## superfund to tracts
 lf <- sf::read_sf("data/landfills.geojson") %>% 
@@ -283,8 +283,8 @@ lf <- sf::read_sf("data/landfills.geojson") %>%
                 select(ID_BLKGRP_20)%>%
                 st_transform(4326)) 
 
-sf::write_sf(sf,"data/landfill_geocode.gpkg")
-write_csv(sf %>% st_drop_geometry(),"data/landfill_geocode.csv")
+sf::write_sf(lf,"data/geocoded/landfill_geocode.gpkg")
+write_csv(lf %>% st_drop_geometry(),"data/geocoded/landfill_geocode.csv")
 
 
 ```
@@ -325,6 +325,18 @@ Water quality monitoring violations from utilities
 
 EJ (contamination sources) (look for ejscreen data)
 
+-TSDF
+
+-Superfund
+
+-Landfills
+
+-animal feedlots
+
+-FRI
+
+-NPDES
+
 100 prisons in appalachia. 50% are in proximity to 2km/ 5km
 
 -   drinking water treatment plant
@@ -345,6 +357,8 @@ What's the counter-factual? Other institutionalized populations
 
     https://hifld-geoplatform.opendata.arcgis.com/maps/nursing-homes
 
+-   
+
 -   Military installations
 
 Census tract, 2020 tracts
@@ -361,8 +375,12 @@ https://www.bop.gov/locations/institutions/bsy/index.jsp
 
 http://dep.gateway.ky.gov/DWW/JSP/AnalyteList.jsp?tinwsys_is_number=1358&tinwsys_st_code=KY
 
+-   get all violations
+
 SW Virginia
 
 Red Onion
 
 Tennessee Case Studies
+
+## Case Study formats:
