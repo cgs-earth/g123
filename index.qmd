@@ -44,14 +44,25 @@ library(tidycensus)
 First we get the boundaries of the Appalachian Regional Commission (ARC) and its constituent counties
 
 ```{r}
-arc <- sf::read_sf("https://services.arcgis.com/nkunl3y8FDxPkXDl/ArcGIS/rest/services/arc_boundary/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=")
+arc <- sf::read_sf("https://services.arcgis.com/nkunl3y8FDxPkXDl/ArcGIS/rest/services/arc_boundary/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=") 
 
 counties <- sf::read_sf("https://reference.geoconnex.us/collections/counties/items?limit=4000")
 states <- sf::read_sf("https://reference.geoconnex.us/collections/states/items?limit=4000")
 counties_ct <- st_centroid(counties)
-counties_ct <- counties_ct[arc,]
-counties <- counties[which(counties$uri %in% counties_ct$uri),]
-states <- states %>% filter(STATEFP %in% counties$STATEFP)
+counties_ct_arc <- counties_ct[arc,]
+counties_arc <- counties[which(counties$uri %in% counties_ct$uri),]
+states <- states %>% filter(STATEFP %in% counties_ct_arc$STATEFP)
+counties_arc_states <- counties %>% filter(STATEFP %in% counties_ct_arc$STATEFP)
+
+counties_ct_arc$ARC <- "in ARC"
+counties_ct_arc <- counties_ct_arc %>% select(id,STATEFP,COUNTYFP,ARC)
+
+counties2 <- counties_arc_states %>%
+  left_join(counties_ct_arc%>%st_drop_geometry(),by=c("id","STATEFP","COUNTYFP")) 
+
+counties2$ARC[which(is.na(counties2$ARC))] <- "not ARC"
+
+
 ```
 
 Now we get relevant public water systems from the Internet of Water geoconnex.us system
@@ -60,10 +71,10 @@ Now we get relevant public water systems from the Internet of Water geoconnex.us
 #download.file(url = "https://www.hydroshare.org/resource/3295a17b4cc24d34bd6a5c5aaf753c50/data/contents/ref_pws.gpkg" ,destfile="data/pws.gpkg")
 
 pws_all <- read_sf("data/pws.gpkg") %>% st_make_valid()
-pws <- pws_all %>% 
-  st_intersects(arc) %>% lengths()
-
-pws <- pws_all[which(pws==1),]
+pws <- pws_all[counties2,]
+pws$ARC <- "not ARC"
+pws2 <- pws[arc,]
+pws$ARC[which(pws$pwsid %in% pws2$pwsid)] <- "in ARC"
 
 pws <- pws %>%
   select(pwsid,
@@ -71,7 +82,8 @@ pws <- pws %>%
          pws_name,
          tier,
          primary_water_source,
-         sdwis_link
+         sdwis_link,
+         ARC
          ) %>%
   mutate(sdwis_link =
            paste0('<a href="',
@@ -85,19 +97,50 @@ Now we get prisons in the region
 ```{r}
 prisons_all <- sf::read_sf("https://opendata.arcgis.com/api/v3/datasets/2d6109d4127d458eaf0958e4c5296b67_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1") 
 
-prisons <- prisons_all %>% 
-  st_intersects(arc) %>% lengths()
+prisons <- prisons_all[states,] %>% filter(TYPE %in% c("STATE","FEDERAL"))
+prisons_arc <- prisons[arc,]
+prisons$ARC <- "not ARC"
+prisons$ARC[which(prisons$FACILITYID %in% prisons_arc$FACILITYID)] <- "in ARC"
 
-prisons <- prisons_all[which(prisons==1 & prisons_all$TYPE %in% c("STATE","FEDERAL")),]
+
 prisons_ct <- st_centroid(prisons)
 ## filter to fed/state only
 ## visualize Status
 
 ## landfills
-landfills <- sf::read_sf("https://hifld-geoplatform.opendata.arcgis.com/datasets/solid-waste-landfill-facilities/explore?location=35.825712%2C-70.244151%2C4.54")
+landfills <- sf::read_sf("https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/Solid_Waste_Landfill_Facilities/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
 
-## superfuns
+landfills <- landfills[states,]
+landfills$ARC <- "not ARC"
+landfills_arc <- landfills[arc,]
+landfills$ARC[which(landfills$OBJECTID %in% landfills_arc$OBJECTID)] <- "in ARC"
+
+## superfunds
 superfund <- sf::read_sf("https://services.arcgis.com/cJ9YHowT8TU7DUyn/ArcGIS/rest/services/Superfund_National_Priorities_List_(NPL)_Sites_with_Status_Information/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&relationParam=&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&defaultSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=")
+
+
+superfund <- superfund[states,]
+superfund$ARC <- "not ARC"
+superfund_arc <- superfund[arc,]
+superfund$ARC[which(superfund$OBJECTID %in% superfund_arc$OBJECTID)] <- "in ARC"
+
+# retirement homes
+retirement <- sf::read_sf("https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/NursingHomes/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+
+retirement <- retirement[states,]
+retirement$ARC <- "not ARC"
+retirement_arc <- retirement[arc,]
+retirement$ARC[which(retirement$OBJECTID %in% retirement_arc$OBJECTID)] <- "in ARC"
+
+# npdes
+npdes <- readr::read_csv("data/npdes_outfalls_layer.csv") %>%
+  st_as_sf(coords=c("LONGITUDE83","LATITUDE83"),crs=4269) %>% st_transform(4326)
+npdes <- npdes[states,]
+npdes$ARC <- "not ARC"
+npdes_arc <- npdes[arc,]
+npdes$ARC[which(npdes$OBJECTID %in% npdes_arc$OBJECTID)] <- "in ARC"
+
+
 
 ### Census
 library(tigris)
@@ -172,19 +215,26 @@ tracts_2020 <- map_df(state_codes, function(state_code) {
 sf::write_sf(tracts_2020,"data/census/tr2020.gpkg")
 
 
+bgs_2000 <- sf::read_sf("data/census/bg2000.gpkg")
+bgs_2010 <- sf::read_sf("data/census/bg2010.gpkg")
+bgs_2020 <- sf::read_sf("data/census/bg2020.gpkg")
+
+tr_2000 <- sf::read_sf("data/census/tr2000.gpkg")
+tr_2010 <- sf::read_sf("data/census/tr2010.gpkg")
+tr_2020 <- sf::read_sf("data/census/tr2020.gpkg")
 
 ## prisons to tracts
-p1 <- st_join(prisons_ct%>%mutate(ID_COUNTY=COUNTYFIPS),tracts_2000%>%
+p1 <- st_join(prisons_ct%>%mutate(ID_COUNTY=COUNTYFIPS),tr_2000%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_00=GEOID)%>%
                 select(ID_TRACT_00)%>%
                 st_transform(4326)) %>%
-  st_join(tracts_2010%>%
+  st_join(tr_2010%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_10=GEOID)%>%
                 select(ID_TRACT_10)%>%
                 st_transform(4326)) %>%
-    st_join(tracts_2020%>%
+    st_join(tr_2020%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_20=GEOID)%>%
                 select(ID_TRACT_20)%>%
@@ -205,24 +255,24 @@ p1 <- st_join(prisons_ct%>%mutate(ID_COUNTY=COUNTYFIPS),tracts_2000%>%
                 select(ID_BLKGRP_20)%>%
                 st_transform(4326)) 
 
-sf::write_sf(p1,"data/prisons_geocode.gpkg")
-write_csv(p1 %>% st_drop_geometry(),"data/prisons_geocode.csv")
+sf::write_sf(p1,"data/geocoded/prisons_geocode.gpkg")
+write_csv(p1 %>% st_drop_geometry(),"data/geocoded/prisons_geocode.csv")
 
 ## superfund to tracts
 sf <- st_join(superfund%>%st_transform(4326),counties%>%
                 mutate(ID_COUNTY=paste0(STATEFP,COUNTYFP))) %>%
   filter(!is.na(ID_COUNTY))%>%
-  st_join(tracts_2000%>%
+  st_join(tr_2000%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_00=GEOID)%>%
                 select(ID_TRACT_00)%>%
                 st_transform(4326)) %>%
-  st_join(tracts_2010%>%
+  st_join(tr_2010%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_10=GEOID)%>%
                 select(ID_TRACT_10)%>%
                 st_transform(4326)) %>%
-    st_join(tracts_2020%>%
+    st_join(tr_2020%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_20=GEOID)%>%
                 select(ID_TRACT_20)%>%
@@ -246,23 +296,23 @@ sf <- st_join(superfund%>%st_transform(4326),counties%>%
 sf::write_sf(sf,"data/geocoded/superfund_geocode.gpkg")
 write_csv(sf %>% st_drop_geometry(),"data/geocoded/superfund_geocode.csv")
 
-## superfund to tracts
-lf <- sf::read_sf("data/landfills.geojson") %>% 
+## landfill to tracts
+lf <- landfills %>% 
   st_join(counties%>%
                 mutate(ID_COUNTY=paste0(STATEFP,COUNTYFP))%>%
             select(ID_COUNTY)) %>%
   filter(!is.na(ID_COUNTY))%>%
-  st_join(tracts_2000%>%
+  st_join(tr_2000%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_00=GEOID)%>%
                 select(ID_TRACT_00)%>%
                 st_transform(4326)) %>%
-  st_join(tracts_2010%>%
+  st_join(tr_2010%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_10=GEOID)%>%
                 select(ID_TRACT_10)%>%
                 st_transform(4326)) %>%
-    st_join(tracts_2020%>%
+    st_join(tr_2020%>%
                 select(GEOID)%>%
                 mutate(ID_TRACT_20=GEOID)%>%
                 select(ID_TRACT_20)%>%
@@ -287,7 +337,52 @@ sf::write_sf(lf,"data/geocoded/landfill_geocode.gpkg")
 write_csv(lf %>% st_drop_geometry(),"data/geocoded/landfill_geocode.csv")
 
 
+
+## npdes to tracts
+npdes <- npdes  %>% 
+  st_join(counties%>%
+                mutate(ID_COUNTY=paste0(STATEFP,COUNTYFP))%>%
+            select(ID_COUNTY)) %>%
+  filter(!is.na(ID_COUNTY))%>%
+  st_join(tr_2000%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_00=GEOID)%>%
+                select(ID_TRACT_00)%>%
+                st_transform(4326)) %>%
+  st_join(tr_2010%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_10=GEOID)%>%
+                select(ID_TRACT_10)%>%
+                st_transform(4326)) %>%
+    st_join(tr_2020%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_20=GEOID)%>%
+                select(ID_TRACT_20)%>%
+                st_transform(4326)) %>%
+     st_join(bgs_2000%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_00=GEOID)%>%
+                select(ID_BLKGRP_00)%>%
+                st_transform(4326)) %>%
+  st_join(bgs_2010%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_10=GEOID)%>%
+                select(ID_BLKGRP_10)%>%
+                st_transform(4326)) %>%
+    st_join(bgs_2020%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_20=GEOID)%>%
+                select(ID_BLKGRP_20)%>%
+                st_transform(4326)) 
+
+sf::write_sf(npdes,"data/geocoded/npdes_geocode.gpkg")
+write_csv(npdes %>% st_drop_geometry(),"data/geocoded/npdes_geocode.csv")
+npdes_major <- npdes[which(npdes$MAJOR_MINOR_FLAG=="Major"),]
+## mines
+
+
 ```
+
 
 ### Make a map
 
@@ -295,8 +390,6 @@ write_csv(lf %>% st_drop_geometry(),"data/geocoded/landfill_geocode.csv")
 
 
   mapview(arc,
-        alpha.regions=0,
-        color="black",
         col.regions="black",
         lwd=3,
         layer.name = "ARC Boundary", canvas=TRUE) +
@@ -305,14 +398,12 @@ write_csv(lf %>% st_drop_geometry(),"data/geocoded/landfill_geocode.csv")
           col.regions="grey",
           lwd=2,
           layer.name="States", canvas=TRUE) +
-   mapview(counties,
-          alpha.regions=0.5,
-          col.regions="grey",
-          lwd=1,
-          layer.name="Counties", canvas=TRUE) +
     mapview(pws,canvas=TRUE, layer.name="Drinking Water Systems") +
     mapview(prisons_ct, canvas=TRUE, cex=5, zcol="TYPE", layer.name="Prisons") +
-    mapview(prisons,canvas=TRUE, legend=FALSE,zcol="TYPE")
+    mapview(prisons,canvas=TRUE, legend=FALSE,zcol="TYPE") + 
+  mapview(retirement, col.regions="red") +
+  mapview(landfills, col.regions="orange") +
+  mapview(superfund, col.regions="purple") 
   
   ## see https://rpubs.com/ksonda-lilp/prisons-pws-arc
 ```
@@ -357,7 +448,7 @@ What's the counter-factual? Other institutionalized populations
 
     https://hifld-geoplatform.opendata.arcgis.com/maps/nursing-homes
 
--   
+-   https://kygisserver.ky.gov/arcgis/rest/services/WGS84WM_Services/Ky_Water_WGS84WM/MapServer/11
 
 -   Military installations
 
