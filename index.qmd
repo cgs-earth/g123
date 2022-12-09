@@ -336,7 +336,45 @@ lf <- landfills %>%
 sf::write_sf(lf,"data/geocoded/landfill_geocode.gpkg")
 write_csv(lf %>% st_drop_geometry(),"data/geocoded/landfill_geocode.csv")
 
+## retirement to tracts
+retirement <- retirement  %>% 
+  st_join(counties%>%
+                mutate(ID_COUNTY=paste0(STATEFP,COUNTYFP))%>%
+            select(ID_COUNTY)) %>%
+  filter(!is.na(ID_COUNTY))%>%
+  st_join(tr_2000%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_00=GEOID)%>%
+                select(ID_TRACT_00)%>%
+                st_transform(4326)) %>%
+  st_join(tr_2010%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_10=GEOID)%>%
+                select(ID_TRACT_10)%>%
+                st_transform(4326)) %>%
+    st_join(tr_2020%>%
+                select(GEOID)%>%
+                mutate(ID_TRACT_20=GEOID)%>%
+                select(ID_TRACT_20)%>%
+                st_transform(4326)) %>%
+     st_join(bgs_2000%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_00=GEOID)%>%
+                select(ID_BLKGRP_00)%>%
+                st_transform(4326)) %>%
+  st_join(bgs_2010%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_10=GEOID)%>%
+                select(ID_BLKGRP_10)%>%
+                st_transform(4326)) %>%
+    st_join(bgs_2020%>%
+                select(GEOID)%>%
+                mutate(ID_BLKGRP_20=GEOID)%>%
+                select(ID_BLKGRP_20)%>%
+                st_transform(4326)) 
 
+sf::write_sf(retirement,"data/geocoded/retirement_geocode.gpkg")
+write_csv(retirement %>% st_drop_geometry(),"data/geocoded/retirement_geocode.csv")
 
 ## npdes to tracts
 npdes <- npdes  %>% 
@@ -399,11 +437,12 @@ npdes_major <- npdes[which(npdes$MAJOR_MINOR_FLAG=="Major"),]
           lwd=2,
           layer.name="States", canvas=TRUE) +
     mapview(pws,canvas=TRUE, layer.name="Drinking Water Systems") +
-    mapview(prisons_ct, canvas=TRUE, cex=5, zcol="TYPE", layer.name="Prisons") +
+    mapview(prisons_ct, canvas=TRUE, cex=12, zcol="TYPE", layer.name="Prisons") +
     mapview(prisons,canvas=TRUE, legend=FALSE,zcol="TYPE") + 
-  mapview(retirement, col.regions="red") +
+  mapview(retirement, col.regions="green") +
   mapview(landfills, col.regions="orange") +
-  mapview(superfund, col.regions="purple") 
+  mapview(superfund, col.regions="purple") + 
+  mapview(npdes_major, col.regions="red")
   
   ## see https://rpubs.com/ksonda-lilp/prisons-pws-arc
 ```
