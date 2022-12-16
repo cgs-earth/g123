@@ -150,7 +150,11 @@ library(sf)
 options(tigris_use_cache = TRUE)
 ctys <- counties(cb = TRUE) %>% 
   mutate(fips = paste0(STATEFP,COUNTYFP)) %>% 
-  filter(fips %in% counties_ct$id)
+  filter(fips %in% counties_arc_states$id) %>% st_transform(4326)
+
+ctys_arc <- ctys[arc,]
+ctys$ARC <- "not ARC"
+ctys$ARC[which(ctys$fips %in% ctys_arc$fips)]<-"in ARC"
 
 state_codes <- states$id
 
@@ -420,7 +424,32 @@ npdes_major <- npdes[which(npdes$MAJOR_MINOR_FLAG=="Major"),]
 
 
 ```
+### drinking water quality
 
+```{r}
+ sdwa <- readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_VIOLATIONS_ENFORCEMENT.csv")
+
+sdwa <- sdwa %>% filter(PWSID %in% pws$pwsid)
+fac <- readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_FACILITIES.csv")
+fac <- fac %>% filter(PWSID %in% sdwa$PWSID)
+codes <- readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_REF_CODE_VALUES.csv") %>% filter(VALUE_TYPE=="CONTAMINANT_CODE")
+
+vio_codes <-readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_REF_CODE_VALUES.csv") %>% filter(VALUE_TYPE=="VIOLATION_CODE") %>% mutate(VIOLATION_CODE =VALUE_CODE, viol_description=VALUE_DESCRIPTION)
+
+
+
+
+
+sdwa$volation_start <- as.Date(sdwa$VIOL_FIRST_REPORTED_DATE,format="%m/%d/%Y")
+sdwa_martin <- sdwa%>% filter(PWSID %in% c("KY0800273","KY0360358"))
+sdwa_martin <- left_join(sdwa_martin,codes,by=c("CONTAMINANT_CODE"="VALUE_CODE")) %>% 
+  distinct(VIOLATION_ID,.keep_all=TRUE)
+
+sdwa_martin <- left_join(sdwa_martin,vio_codes,by=c("VIOLATION_CODE")) 
+
+write_csv(sdwa,"data/sdwa_violations.csv")
+write_csv(fac,"data/sdwa_facilities.csv")
+```
 
 ### Make a map
 
@@ -436,6 +465,11 @@ npdes_major <- npdes[which(npdes$MAJOR_MINOR_FLAG=="Major"),]
           col.regions="grey",
           lwd=2,
           layer.name="States", canvas=TRUE) +
+  mapview(counties2,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=2,
+          layer.name="Counties", canvas=TRUE) +
     mapview(pws,canvas=TRUE, layer.name="Drinking Water Systems") +
     mapview(prisons_ct, canvas=TRUE, cex=12, zcol="TYPE", layer.name="Prisons") +
     mapview(prisons,canvas=TRUE, legend=FALSE,zcol="TYPE") + 
@@ -500,6 +534,7 @@ Central Appalachia Deep Dive
 -   Wardens cooperative in Virginia
 
 USP Big Sandy
+Red Onion prison
 
 https://www.bop.gov/locations/institutions/bsy/index.jsp
 
