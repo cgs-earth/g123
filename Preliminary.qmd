@@ -1,0 +1,311 @@
+---
+title: "Preliminary Analysis for Appalachian Prison Water Contamination Exposure Project"
+author: 
+  - Kyle Onda, Center for Geospatial Solutions
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format: 
+  html:
+    title-block-banner: true
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    html-math-method: katex
+    css: styles.css
+    code-fold: true
+    code-summary: "show the code"
+    code-overflow: wrap
+    code-tools: true
+    number-sections: true
+    theme: 
+      dark: slate
+      light: flatly
+editor: visual
+---
+
+## Introduction
+
+This document shows a preliminary analysis for the study. This analysis is scoped to a region defined by the following counties:
+
+The demonstration counties are the following select counties in Central Appalachia:
+
+**Kentucky**
+
+-   Martin -- **Big Sandy**
+
+-   Johnson
+
+-   Floyd
+
+-   Knott
+
+-   Letcher
+
+-   Pike
+
+**West Virginia**
+
+-   Wayne?
+
+-   Logan
+
+-   Mingo
+
+-   Wyoming
+
+-   McDowell -- **FCI McDowell**
+
+**Virginia**
+
+-   Buchanan
+
+-   Dickenson
+
+-   Wise -- **Red Onion**
+
+-   Russell
+
+-   Tazwell?
+
+    The aims for this study are as follows:
+
+### Aim 1:
+
+We hypothesize that population-weighted annual counts of health-based water quality violations will be:
+
+(H1a) higher for systems serving communities in Appalachia compared with non-Appalachian systems the 13 US States in the Appalachian region.  
+
+(H1b) higher for systems serving state and federal prisons compared to other systems in Appalachia
+
+(H1c) higher for systems serving larger proportions of lower-income (poverty rate \>18) and racial and ethnic minority populations, compared with systems serving predominately white and higher-income populations.  
+
+\## throw out "tier 3" boundaries, and use them with caveats. Either way, calculate SES indicators (prop nonwhite/ median HH income, 20th percentile income, Poverty rate, etc) via population-area weighting over intersecting census block groups al la Goddard 2021 PLOS ONE paper.
+
+AC to run initial models
+
+Xi= SES indicator i
+
+Yt= count of violations in year t
+
+estimate Y = beta\*X + covariates + error term model
+
+Do this for ARC
+
+pwsid \| year \| SES indicators 1-n \| contaminant \| violation count \| county \| state \| serves_prison_confident \| serves_prison_guess
+
+| pwsid \* | year \* | SES socioeconomic status (many) | contaminant \* | violation count | In ARC? | county | state | serves_prison_confident | serves_prison_guess |
+|--------|--------|--------|--------|--------|--------|--------|--------|--------|--------|
+|          |         |                                 |                |                 |         |        |       |                         |                     |
+|          |         |                                 |                |                 |         |        |       |                         |                     |
+
+### Aim 2:
+
+We hypothesize that  
+
+(H2a) water systems serving prisons will be located in closer proximity, higher risk to environmental hazards compared with other water systems.
+
+(H2b) prisons will be located in closer proximity to environmental hazards compared with nursing homes.
+
+(H2c) There will be a positive association between the rate of water quality violations of drinking water systems and the number and type of environmental hazards within those system's water supply watersheds 
+
+| pwsid \* | year \* | SES socioeconomic status (many) | contaminant \* | violation count | In ARC? | county | state | serves_prison_confident | serves_prison_guess | Superfund count | Mine count | NPDES count |
+|------|------|------|------|--------|------|------|------|-------|------|------|------|------|
+|          |         |                                 |                |                 |         |        |       |                         |                     |                 |            |             |
+|          |         |                                 |                |                 |         |        |       |                         |                     |                 |            |             |
+
+### Aim 3: 
+
+*Hypotheses: [In Central Appalachia]{.underline}, for PWS serving
+prisons and higher proportions of low-income and racial and ethnic minority
+populations, (H3a) historic water quality testing frequencies will be lower (controlling
+for PWS size), and (H3a) for larger PWS, calculation of historic health-based
+violations at monthly resolutions will result in higher counts of violations
+compared with PWS quarterly reports.* Building on our database (Aims 1 & 2), we will
+compile, ground-truth, and analyze historic (2005-2024) water testing data for
+all available parameters for all PWS in the 82 counties of Central Appalachia to
+calculate monthly, quarterly, and annual mean concentrations and violation counts
+and use statistical models (controlling for potential confounders) to assess PWS violation and
+reporting disparities for incarcerated, low-income, and minority populations.
+
+For the water utilities serving:
+
+### USP Big Sandy (Martin County, KY) pwsid:KY0360358 
+
+Get all Chemical samples!
+
+https://dep.gateway.ky.gov/DWW/JSP/NonTcrSamples.jsp?tinwsys_is_number=533&tinwsys_st_code=KY&history=1&counter=1
+
+Get all microbiology samples:
+
+https://dep.gateway.ky.gov/DWW/JSP/TcrSampleResults.jsp?tinwsys_is_number=533&tinwsys_st_code=KY&counter=1
+
+### Red Onion (Wise County Virginia) pwsid: 
+
+| VA1195650  |
+|------------|
+
+McDowell Federal Correctional Institution (McDowell County, WV): WV3302421
+
+
+
+
+## Aim 1:
+
+Load necessary libraries
+
+```{r}
+#| echo: false
+library(tidyverse)
+library(sf)
+library(mapview)
+library(tidycensus)
+library(tigris)
+library(lubridate)
+options(tigris_use_cache = TRUE)
+sf_use_s2(FALSE)
+```
+
+First, we need to find all Community Water Systems and Prisons in the demonstration counties.
+
+```{r}
+#| echo: false
+states <-  sf::read_sf("https://reference.geoconnex.us/collections/states/items?limit=4000") %>% filter(
+  STUSPS %in% c("KY","WV","VA")
+)
+
+counties <- sf::read_sf("https://reference.geoconnex.us/collections/counties/items?limit=4000") %>%
+  filter(NAME %in% c(
+    "Martin",
+    "Johnson",
+    "Floyd",
+    "Knott",
+    "Letcher",
+    "Pike",
+    "Wayne",
+    "Logan",
+    "Mingo",
+    "Wyoming",
+    "McDowell",
+    "Buchanan",
+    "Dickenson",
+    "Wise",
+    "Russell",
+    "Tazwell"
+  ))  %>%
+  filter(
+    STATEFP %in% states$STATEFP
+  ) 
+
+counties <- counties %>%  filter(!(id %in% c("51063",
+                     "21207",
+                     "21231",
+                     "21141")))
+ 
+mapview(states,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=2,
+          layer.name="States") +
+  mapview(counties,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=1,
+          layer.name="Counties") 
+
+```
+
+Now we identify all prisons and CWS in these counties. Prisons location [data](https://hifld-geoplatform.opendata.arcgis.com/datasets/2d6109d4127d458eaf0958e4c5296b67_0/explore) comes from the Homeland Infrastructure Foundation-Level Data (HIFLD) platform. CWS [data](https://www.hydroshare.org/resource/c9d8a6a6d87d4a39a4f05af8ef7675ad/) comes from the Internet of Water Community Water Systems reference layer. Note that the best available estimates for Community Water System boundaries in this region are either municipal or Census Designated Place boundaries, or estimated circles around treatment plant locations. As such, many prisons cannot be definitively located inside a boundary. For the purposes of this preliminary exercise, it is assumed that a prison is served by the water system whose estimated boundary it is closest to. \[\[add UPS Big Sandy problem\]\] Future work will procure higher quality boundary data, or definitive information from prison authorities as to which community water supply serves as their drinking water source.
+
+```{r}
+#| echo: false
+#| message: false
+#| results: asis
+#| warning: false
+prisons_all <- sf::read_sf("https://opendata.arcgis.com/api/v3/datasets/2d6109d4127d458eaf0958e4c5296b67_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1") 
+
+prisons <- prisons_all[counties,] %>% filter(TYPE %in% c("STATE","FEDERAL")) %>% st_centroid()
+
+cws <- sf::read_sf("data/pws.gpkg") %>% st_transform(4326) 
+cws <- cws[counties,] %>% st_make_valid()
+
+prison_cws <- prisons %>% st_join(cws,join=st_nearest_feature)
+cws$serve_prison <- "Does not serve prison"
+cws$serve_prison[which(cws$pwsid %in% prison_cws$pwsid)] <- "Serves a prison"
+
+mapview(states,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=2,
+          layer.name="States") +
+  mapview(counties,
+          alpha.regions=0.5,
+          col.regions="grey",
+          lwd=1,
+          layer.name="Counties")+
+  mapview(prisons,zcol="TYPE") +
+  mapview(cws,layer.name="Community Water Systems",zcol="serve_prison",col.regions=c("blue","red"))
+```
+
+Having identified these CWS serving prisons, we can compare the counts of health-based drinking water violations across prison and not-prison serving CWS over the last 20 years by using SDWIS violations and enforcement data.
+
+```{r}
+#| echo: false
+#| message: false
+#| results: asis
+#| warning: false
+
+ sdwa <- readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_VIOLATIONS_ENFORCEMENT.csv")
+
+sdwa <- sdwa %>% filter(PWSID %in% cws$pwsid)
+fac <- readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_FACILITIES.csv")
+fac <- fac %>% filter(PWSID %in% sdwa$PWSID)
+codes <- readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_REF_CODE_VALUES.csv") %>% filter(VALUE_TYPE=="CONTAMINANT_CODE")
+
+vio_codes <-readr::read_csv("~/Downloads/SDWA_latest_downloads/SDWA_REF_CODE_VALUES.csv") %>% filter(VALUE_TYPE=="VIOLATION_CODE") %>% mutate(VIOLATION_CODE =VALUE_CODE, viol_description=VALUE_DESCRIPTION)
+
+
+
+
+
+sdwa$violation_start <- as.Date(sdwa$COMPL_PER_BEGIN_DATE,format="%m/%d/%Y")
+sdwa_select <- sdwa
+sdwa_select <- left_join(sdwa_select,codes,by=c("CONTAMINANT_CODE"="VALUE_CODE")) %>% 
+  distinct(VIOLATION_ID,.keep_all=TRUE)
+
+sdwa_select <- left_join(sdwa_select,vio_codes,by=c("VIOLATION_CODE")) 
+
+mcl_viols <- sdwa_select %>% filter(VIOLATION_CATEGORY_CODE=="MCL")
+mcl_viols$year <- year(mcl_viols$violation_start)
+
+mcl_viols_ts <- mcl_viols %>% 
+  mutate(count=1) %>% 
+  group_by(PWSID,VALUE_DESCRIPTION.x,year) %>% 
+  summarise(count=sum(count)) %>% 
+  ungroup() %>%
+  rename(contaminant=VALUE_DESCRIPTION.x)
+
+
+table <- crossing(cws$pwsid,c(2002:2022),dplyr::distinct(mcl_viols_ts,contaminant))
+table$pwsid <- table$`cws$pwsid`
+table$year <- table$`c(2002:2022)`
+table <- table %>% select(pwsid,year,contaminant)
+
+table <- left_join(table,mcl_viols_ts,by=c("pwsid"="PWSID","year"="year","contaminant"="contaminant"))
+table <- left_join(table,st_drop_geometry(select(cws,pwsid,population_served_count,BOUNDARY_TYPE,serve_prison)),by="pwsid")
+
+table$count[which(is.na(table$count))]<-0
+
+table2 <- table %>%  group_by(year,contaminant) %>%
+  mutate(count_systems=1)%>%ungroup() %>%
+  group_by(serve_prison,contaminant) %>% 
+  summarize(system_count=sum(count_systems)/21,
+    total_pop=sum(population_served_count)/21,
+            total_viol_count=sum(count), 
+            viol_count_per_system = sum(count)/count_systems,
+            avg_viol_count_annual=mean(count),
+   #         total_viol_count_per_person=(sum(count)/(sum(population_served_count)/21)),
+            avg_viol_count_annual=mean(count/population_served_count))
+
+table2$avg_1000 <- 1000*table2$total_viol_count/table2$total_pop
+
+knitr::kable(table2)
+```
